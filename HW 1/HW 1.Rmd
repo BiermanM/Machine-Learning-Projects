@@ -1,0 +1,80 @@
+# Matthew Bierman, Homework 1
+
+## 1.
+This dataset has 506 rows/observations and 14 columns/variables and is for housing values in Boston suburbs. The columns contain data such as crime rate, proportion of residential land zoned for lots, average number of rooms per dwelling, and pupial-teacher ratio.
+
+```{r}
+library(MASS)   # Loading library MASS
+data(Boston)    # Load Boston dataset into memory
+str(Boston)     # Overview of data
+```
+
+## 2.
+
+```{r}
+head(Boston, n = 3)       # Displaying the first few rows
+tail(Boston, n = 2)       # Displaying the last 2 rows
+Boston[5,]                # Displaying row 5
+head(Boston[,1], n = 3)   # Displaying the first few rows of column 1
+names(Boston)             # Displaying the variable names
+```
+
+## 3.
+```{r}
+cat("Mean of Crime Rate:", mean(Boston$crim))
+cat("Median of Crime Rate:", median(Boston$crim))
+cat("Range of Crime Rate:", range(Boston$crim)[2] - range(Boston$crim)[1]) # range() returns a vector <min, max>, so taking max - min will result in the range of the values
+```
+
+## 4.
+This histogram tells us that a majority of towns in Boston have a very low crime rate, or none at all.
+```{r}
+hist(Boston$crim, main = paste("Histogram of Per Capita Crime Rate by Town in Boston"), xlab = paste("Per Capita Crime Rate by Town"))
+```
+
+## 5.
+A correlation value of -0.38 between crime rate and median house value means there is a loose, negative correlation between crime rate and median house value. The crime rate column is not that useful in predicting median house value.
+```{r}
+cat("Correlation between crime rate and median house value:", cor(Boston$crim, Boston$medv))
+```
+
+## 6.
+There is a slightly strong, positive correlation between the number of rooms in a house and its value/price, meaning as the number of rooms increases, the value of the house will also generally increase.
+```{r}
+cat("Correlation between number of rooms and median house value:", cor(Boston[,6], Boston[,14]))
+plot(Boston$rm, Boston$medv, main = "Number of Rooms vs. Median House Value", xlab = paste("Number of Rooms"), ylab = paste("Median House Value"), pch = 20, col = "blue")
+```
+
+## 7.
+Converting the chas column from numerical to categorical values causes the graphs to view the data differently in that chas as numerical values are just (x, y) coordinates, but chas as categorical values is category 0 or category 1. Category 0 means the house does not bound the Charles River and category 1 means the house bounds the Charles River. This means the graph is plotting the values of houses that bound the river and the plotting the values of houses that don't bound the river separately.
+```{r}
+is.factor(Boston$chas)                # Checking if chas column is a factor variable
+plot(Boston$chas, Boston$medv, main = "Tract Bounds Charles River vs. Median House Value", xlab = "Tract Bounds Charles River", ylab = "Median House Value")
+
+Boston$chas <- factor(Boston$chas)    # Converting chas column to factors
+plot(Boston$chas, Boston$medv, main = "Tract Bounds Charles River vs. Median House Value", xlab = "Tract Bounds Charles River", ylab = "Median House Value")
+```
+
+## 8.
+The rad variable is of type int, which is an integer. summary() shows that 50% of the data is tightly packed between 1 and 9.549, but the other 50% is spread loosely between 9.549 and 24, with at least 25% of all the data having the value 24. unique() shows that there were only 9 different values for rad found in the dataset.
+```{r}
+summary(Boston$rad)
+unique(Boston$rad)
+sum(Boston$rad == 24)
+cat (100 * nrow(Boston[Boston$rad == 24,]) / dim(Boston)[1], "%", sep = "")
+```
+
+## 9.
+This graph shows that almost 100% of the homes that are far from radial highways have a median home value of less than \$30,000 and 25% of the homes that aren't far from radial highways have a median home value of greater than \$30,000.
+```{r}
+Boston$far <- ifelse(Boston$rad == 24, Boston$far <- TRUE, Boston$far <- FALSE)
+Boston$far <- factor(Boston$far)
+plot(Boston$far, Boston$medv, main = "Is Far From Radial Highways vs. Median Home Value", xlab = "Is Far From Radial Highways", ylab = "Median Home Value")
+```
+
+## 10.
+The neighborhood with the highest median home value, index 162, has a higher crime rate than 50% of other neighborhoods in Boston, has more rooms than over 75% of other neighboorhoods in Boston, has the lowest percentage of lower status of the population compared to other neighborhoods in Boston, and over 75% of other neighborhoods in Boston have a median home value that is less than or equal to half of the highest median home value. 
+```{r}
+summary(Boston[, c("crim", "rm", "lstat", "medv")])
+Boston[which.max(Boston$medv), c("crim", "rm", "lstat", "medv")]
+```

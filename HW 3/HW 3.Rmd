@@ -1,0 +1,136 @@
+# Matthew Bierman, Homework 3
+
+### Purpose:
+The purpose of this script is to find a good predictor for cell malignancy, since Cell.size and Cell.shape doesn't work well as predictors.
+
+## 1.
+a.) There are 699 instances.
+
+b.) The target column is 'Class'.
+
+c.) There are 9 predictors and they are of the factor and ordinal factor data types.
+
+d.) 34.48% of observations are malignant.
+
+```{r}
+library(mlbench)            # Loading library mlbench
+data(BreastCancer)          # Load BreastCancer dataset into memory
+str(BreastCancer)           # Overview of data
+head(BreastCancer)          # First few rows of dataset
+summary(BreastCancer$Class) # Distribution summary of Class column in dataset
+
+paste("Benign:", sum(BreastCancer$Class == "benign") / dim(BreastCancer)[1])    # Percentage of benign observations
+paste("Malignant:", sum(BreastCancer$Class == "malignant") / dim(BreastCancer)[1])    # Percentage of malignant observations
+```
+
+## 2.
+The warning means the data could be linearly separable. This could be fixed by measuring size and/or shape with integers or doubles instead of factors.
+
+```{r}
+glm0 <- glm(Class~Cell.size+Cell.shape, data = BreastCancer, family = binomial)   # Generalized linear model using Cell.size and Cell.shape to predict Class
+summary(glm0)
+```
+
+## 3.
+Yes, this is a good idea, because the glm0 model only resulted in 0 or 1 and logistic regression wouldn't work well on 10 different factors for both Cell.size and Cell.shape.
+
+```{r}
+BreastCancer$Cell.small <- 0                                    # Create Cell.small column with default values 0
+BreastCancer$Cell.small[BreastCancer$Cell.size == 1] <- 1       # Change value in Cell.small to 1 if Cell.size is 1
+BreastCancer$Cell.small <- factor(BreastCancer$Cell.small)      # Convert Cell.small to factor instead of int
+
+BreastCancer$Cell.regular <- 0                                  # Create Cell.regular column with default values 0
+BreastCancer$Cell.regular[BreastCancer$Cell.shape == 1] <- 1    # Change value in Cell.regular to 1 if Cell.size is 1
+BreastCancer$Cell.regular <- factor(BreastCancer$Cell.regular)  # Convert Cell.regular to factor instead of int
+
+summary(BreastCancer$Cell.size)                                 # Distribution summary for Cell.size column
+summary(BreastCancer$Cell.shape)                                # Distribution summary for Cell.shape column
+summary(BreastCancer$Cell.small)                                # Distribution summary for Cell.small column
+summary(BreastCancer$Cell.regular)                              # Distribution summary for Cell.regular column
+```
+
+## 4.
+With Cell.size, cells that have a size of 1 or 2 tend to be malignant while sizes 5-10 tend to be benign. Cell.shape has a similar pattern where sizes 1-2 are malignant and 5-10 are benign. Yes, a cutoff of size == 1 and shape == 1 is justified because the density plots begin to decrease as size == 2 and shape == 2.
+
+```{r}
+attach(BreastCancer)
+par(mfrow = c(1, 2))
+cdplot(Class~Cell.size)     # Density plot for Cell.size vs. Class
+cdplot(Class~Cell.shape)    # Density plot for Cell.shape vs. Class
+```
+
+## 5.
+The question says "Create plots (**not cdplots**) with our new columns ..." but then contradicts itself by saying "... Now create two **cdplot()** graphs for the new columns ...", so I showed both just to be safe.
+
+Small and regular cell size/shape is a good predictor of breast cancer. From the cell size data, 98.34% of non-small cells were malignant, leaving only 1.66% of the data being a Type II error. From the cell shape data, 99.17% of non-regular shaped cells were malignant, leaving only 0.83% of the data being a Type II error.
+
+```{r}
+attach(BreastCancer)
+par(mfrow = c(1, 2))
+plot(Class~Cell.small)      # Plot for Cell.small vs. Class
+plot(Class~Cell.regular)    # Plot for Cell.regular vs. Class
+
+par(mfrow = c(1, 2))
+cdplot(Class~Cell.small)    # Density plot for Cell.small vs. Class
+cdplot(Class~Cell.regular)  # Density plot for Cell.regular vs. Class
+
+paste ("Percentage of small observations that are malignant: ", 100 * sum(Cell.small == 1 & Class == "malignant") / sum(Class == "malignant"), "%", sep = "")
+paste ("Percentage of non-small observations that are malignant: ", 100 * sum(Cell.small == 0 & Class == "malignant") / sum(Class == "malignant"), "%", sep = "")
+paste ("Percentage of regular observations that are malignant: ", 100 * sum(Cell.regular == 1 & Class == "malignant") / sum(Class == "malignant"), "%", sep = "")
+paste ("Percentage of non-regular observations that are malignant: ", 100 * sum(Cell.regular == 0 & Class == "malignant") / sum(Class == "malignant"), "%", sep = "")
+```
+
+## 6.
+```{r}
+set.seed(1234)
+i <- sample(1:nrow(BreastCancer), nrow(BreastCancer) * 0.80, replace = FALSE)   # take random sample from dataset to divide into train and test
+train <- BreastCancer[i,]     # 80% of dataset in train
+test <- BreastCancer[-i,]     # 20% of dataset in test
+```
+
+## 7.
+a.) Cell.small (cell size) and Cell.regular (cell shape) are both very good predictors of breast cancer, as their Type II errors are less than two percent for both predictors (as shown in Question #5) and the p-value is nearly 0 for both predictors.
+
+b.) Both null deviance and residual deviance have high values, while the residual deviance has a value much lower than the null deviance value while being only two degrees of freedom lower.
+
+c.) The AIC score is fairly large, as it is greater than the residual deviance and less than the null deviance.
+
+```{r}
+glm1 <- glm(Class~Cell.small+Cell.regular, data = BreastCancer, family = binomial)  # Generalized linear model using Cell.small and Cell.regular to predict Class
+summary(glm1)
+```
+
+## 8.
+```{r}
+probs <- predict(glm1, newdata = test, type = "response")   # Use glm1 on the test dataset to see how accurate our model is
+pred <- ifelse(probs > 0.5, "malignant", "benign")
+paste("The test had an accuracy of ", 100 * mean(pred == test$Class), "%", sep = "")
+```
+
+## 9.
+a.) The coefficient is -4.040546 logits.
+
+b.) This coefficient can be interpreted as increasing the predictor (Cell.small) by one unit decreases the target by 4.040546 logits.
+
+c.) There is a 1.73% chance of a cell being malignant if it is small.
+
+d.) The probability of malignancy if Cell.small is true over the whole BreastCancer dataset is 1.66%, which is close to the above 1.73%. They're close because whether or not the cell is small has a very strong correlation with whether or not the cell is malignant.
+
+```{r}
+glm1$coefficients[2]
+exp(glm1$coefficients[2]) / (1 + exp(glm1$coefficients[2]))               # Probability
+sum(Cell.small == 1 & Class == "malignant") / sum(Class == "malignant")   # Probability over whole dataset
+```
+
+## 10.
+All three models have almost identical degrees of freedom, as they differ by at most one. The "Class ~ Cell.small + Cell.regular" model has the lowest residual deviance, followed by "Class ~ Cell.small" and then "Class ~ Cell.regular". This means that using Cell.small and Cell.regular as predictors is best and then using only Cell.small would be a better predictor than using only Cell.regular. The "Class ~ Cell.small + Cell.regular" model also has the smallest AIC score of the three models and therefore is the best model (of the three models) to use. The "Class ~ Cell.small + Cell.regular" model differs from the "Class ~ Cell.small" model by 61 and differs from the "Class ~ Cell.regular" model by 116.
+
+```{r}
+glm_small <- glm(Class~Cell.small, data = BreastCancer, family = binomial)      # Generalized linear model using Cell.small to predict Class
+glm_regular <- glm(Class~Cell.regular, data = BreastCancer, family = binomial)  # Generalized linear model using Cell.regular to predict Class
+anova(glm_small, glm_regular, glm1)                                             # Use anova to compare multiple models
+
+summary(glm_small)
+summary(glm_regular)
+summary(glm1)
+```

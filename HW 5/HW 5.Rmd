@@ -1,0 +1,122 @@
+# Matthew Bierman, Homework 5
+
+# 1. Set Up Auto Data
+```{r}
+# Load library for Naïve Bayes and SVM
+library(e1071)
+
+# Load data
+library(ISLR)
+data(Auto)
+
+# Create 'mpglevel' column
+median_mpg <- median(Auto$mpg)
+Auto$mpglevel <- 0
+Auto$mpglevel[Auto$mpg > median_mpg] <- 1
+Auto$mpglevel <- factor(Auto$mpglevel)
+
+# Divide into train and test sets
+set.seed(1234)
+i <- sample(1:nrow(Auto), nrow(Auto) * 0.75, replace = FALSE)
+train <- Auto[i, c(2:8,10)]
+test <- Auto[-i, c(2:8,10)]
+```
+
+# 2. Build a Naïve Bayes Model
+#### a.) Build a model on the train set
+```{r}
+nb <- naiveBayes(mpglevel~., data = train)
+nb
+```
+#### b.) Use the predict() function on the test set
+```{r}
+pred <- predict(nb, newdata = test[,-8])
+```
+#### c.) Create a table comparing predicted to actual values for mpglevel
+```{r}
+table(pred, test$mpglevel)
+```
+#### d.) Calculate the mean accuracy
+```{r}
+mean(pred == test$mpglevel)
+```
+
+# 3. SVM Linear Model
+#### a.) Use the tune() function to perform cross-validation to determine the best value for cost
+```{r}
+tune.linear <- tune(svm, mpglevel~., data = train, kernel = "linear", ranges = list(cost=c(0.001, 0.01, 0.1, 1, 5, 10, 100)))
+summary(tune.linear)
+```
+#### b.) Use the parameter(s) from the previous step to build an svm model with a linear kernel on the train set
+```{r}
+best.model <- tune.linear$best.model
+summary(best.model)
+```
+#### c.) Use the predict() function on the test set
+```{r}
+pred <- predict(best.model, test[, -8])
+
+```
+#### d.) Create a table comparing predicted to actual values for mpglevel
+```{r}
+table(pred, test$mpglevel)
+```
+#### e.) Calculate the mean accuracy
+```{r}
+mean(pred == test$mpglevel)
+```
+
+# 4. SVM Polynomial Model
+#### a.) Use the tune() function to perform cross-validation to determine the best values for cost and degree
+```{r}
+tune.polynomial <- tune(svm, mpglevel~., data = train, kernel = "polynomial", ranges = list(cost=c(0.001, 0.01, 0.1, 1, 5, 10, 100)))
+summary(tune.polynomial)
+```
+#### b.) Use the parameter(s) from the previous step to build an svm model with a polynomial kernel on the train set
+```{r}
+best.model <- tune.polynomial$best.model
+summary(best.model)
+```
+#### c.) Use the predict() function on the test set
+```{r}
+pred <- predict(best.model, test[, -8])
+```
+#### d.) Create a table comparing predicted to actual values for mpglevel
+```{r}
+table(pred, test$mpglevel)
+```
+#### e.) Calculate the mean accuracy
+```{r}
+mean(pred == test$mpglevel)
+```
+
+# 5. SVM Radial Model
+#### a.) Use the tune() function to perform cross-validation to determine the best values for cost and gamma
+```{r}
+tune.radial <- tune(svm, mpglevel~., data = train, kernel = "radial", ranges = list(cost=c(0.001, 0.01, 0.1, 1, 5, 10, 100)))
+summary(tune.radial)
+```
+#### b.) Use the parameter(s) from the previous step to build an svm model with a radial kernel on the train set
+```{r}
+best.model <- tune.radial$best.model
+summary(best.model)
+```
+#### c.) Use the predict() function on the test set
+```{r}
+pred <- predict(best.model, test[, -8])
+```
+#### d.) Create a table comparing predicted to actual values for mpglevel
+```{r}
+table(pred, test$mpglevel)
+```
+#### e.) Calculate the mean accuracy
+```{r}
+mean(pred == test$mpglevel)
+```
+
+# 6. Questions
+#### a.) Compare the accuracy results for the 4 models
+Naïve Bayes had an accuracy of 92.86%, SVM Linear had an accuracy of 91.84%, SVM Polynomial has an accuracy of 90.82%, and SVM Radial had an accuracy of 92.86%. Overall, Naïve Bayes and SVM Radial had the best accuracy of the four models with 92.86%, but SVM Radial performed slightly better because it had fewer false positives. All four models had fairly high and approximately similar accuracies.
+
+#### b.) Discuss the advantages and disadvantages of Naïve Bayes vs. SVM
+Naïve Bayes and SVM performed similarly for this Auto dataset. In general, Naïve Bayes performs better with smaller datasets and when classifying text. SVM performs better (compared to other models) when the number of predictors is larger than the number of examples. Naïve Bayes does not perform well when predictors are dependent on each other, since Naïve Bayes assumes all predictors are independent of each other. SVM does not perform well when the data does not follow a pattern (linear, polynomial, radial, etc).

@@ -1,0 +1,120 @@
+# Matthew Bierman, Homework 4
+
+### Purpose:
+The purpose of this script is to run logistic regression and the kNN algorithm on the Auto data set.
+
+# 1. Set Up Auto Data
+```{r}
+# Part a
+library(ISLR)
+data(Auto)
+
+# Part b
+median_mpg <- median(Auto$mpg)
+paste("The average value for mpg is", median_mpg)
+
+# Part c
+Auto$mpglevel <- 0
+Auto$mpglevel[Auto$mpg > median_mpg] <- 1
+Auto$mpglevel <- factor(Auto$mpglevel)
+
+# Part d
+names(Auto)
+```
+
+# 2. Plots
+
+```{r}
+# Part a
+attach(Auto)
+par(mfrow = c(2, 2))
+
+
+# Part b
+plot(horsepower~mpg, col = (Auto$mpglevel))
+plot(weight~mpg, col = (Auto$mpglevel))
+
+# Part c
+plot(horsepower~mpglevel)
+plot(weight~mpglevel)
+```
+
+# 3. Create Train and Test Data
+```{r}
+# Part b
+set.seed(1234) # Setting the seed must be executed before selecting the random sample, even though it was listed out of order in the instructions
+
+# Part a
+i <- sample(1:nrow(Auto), nrow(Auto) * 0.75, replace = FALSE)
+train <- Auto[i,]
+test <- Auto[-i,]
+
+# Part c
+train <- train[, c(2:8,10)]
+test <- test[, c(2:8,10)]
+head(train)
+```
+
+# 4. Build Logistic Regression Model
+```{r}
+# Part a
+glm1 <- glm(mpglevel~., data = train, family = binomial)
+summary(glm1)
+
+# Part b
+probs <- predict(glm1, newdata = test, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+
+# Part c
+table(pred, test$mpglevel)
+
+# Part d
+mean(pred == test$mpglevel)
+```
+
+# 5. Cluster with kNN (Not Scaled)
+```{r}
+# Part a
+library(class)
+fit <- knn(train = train[,1:7], test = test[,1:7], cl = train$mpglevel, k = 1)
+
+# Part b
+table(fit, test$mpglevel)
+mean(fit == test$mpglevel)
+```
+
+# 6. Cluster with kNN (Scaled)
+```{r}
+# Part a
+scaled_Auto <- data.frame(scale(Auto[,2:8]))
+scaled_train <- scaled_Auto[i,]
+scaled_test <- scaled_Auto[-i,]
+
+# Part b
+scale_train_labels <- Auto[i,10]
+
+# Part c
+scale_test_labels <- Auto[-i,10]
+
+# Part d
+scaled_fit <- knn(train = scaled_train, test = scaled_test, cl = scale_train_labels, k = 1)
+
+# Part e
+table(scaled_fit, scale_test_labels)
+mean(scaled_fit == scale_test_labels)
+```
+
+# 7. Questions
+a.) The relationships between mpg and horsepower as well as mpg and weight are strong and negative, but the relationships for both seem to be slightly curved, so they are not linear relationships.
+
+b.) We got data points for the first two graphs and box plots for the last two graphs because mpg, horsepower, and weight are all numeric variables, while mpglevel is a factor with only two possible values.
+
+c.) The "name" column needs to be removed because it the name of a car has no effect on the mpg of a car, and including it could lead to the algorithms making incorrect conclusions that the car's mpg is affected by the car's name.
+
+d.) The "mpg" column needs to be removed because we created the "mpglevel" column from "mpg", so there would always be a perfect correlation between "mpg" and "mpglevel", and showing so does not help find what columns actually are good predictors for mpglevel.
+
+e.) Logistic regression and non-scaled kNN had equal mean accuracies of 88.78%, while scaled kNN had the largest mean accuracy of 91.84%. 
+
+f.) Similarities: Both logistic regression and kNN can use multiple predictors when predicting a target. Both logistic regression and kNN can also predict for factor variables.
+
+Differences: Logistic regression returns a probability of how likely that value would have the given category, but kNN only returns the most likely category that the value would have (based on the closest neighbor, since it is using k = 1). Logistic regression can only choose between two categories for a value, kNN can choose between more than two categories.

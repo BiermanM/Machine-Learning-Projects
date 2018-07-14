@@ -1,0 +1,219 @@
+# Matthew Bierman, Homework 6
+
+## Problem 1: Default Data
+### 1. Set Up Data
+#### a.) Load the ISLR library and attach the Default data set
+```{r}
+library(ISLR)
+data(Default)
+attach(Default)
+```
+#### b.) Run the dim() and names() functions on Default
+```{r}
+dim(Default)
+names(Default)
+```
+#### c.) Use function set.seed(2017) so your results are reproducible
+```{r}
+set.seed(2017)
+```
+#### d.) Divide the data into 80% for training and the rest for a test set
+```{r}
+i <- sample(1:nrow(Default), nrow(Default) * 0.80, replace = FALSE)
+train <- Default[i, ]
+test <- Default[-i, ]
+```
+
+### 2. Logistic Regression Model
+#### a.) Create a logistic regression model on the training data where default is predicted by all other variables
+```{r}
+glm <- glm(default~., data = train, family = binomial)
+```
+#### b.) Run a summary of the model
+```{r}
+summary(glm)
+```
+#### c.) Predict Yes/No on the test data
+```{r}
+probs <- predict(glm, newdata = test, type = "response")
+pred <- ifelse(probs > 0.5, "Yes", "No")
+```
+#### d.) Compute the accuracy
+```{r}
+table(pred, test$default)
+mean(pred == test$default)
+```
+
+### 3. Decision Tree Model
+#### a.) Create a decision tree model on the training data
+```{r}
+library(tree)
+tree <- tree(default~., data = train)
+```
+#### b.) Run a summary of the model
+```{r}
+summary(tree)
+```
+#### c.) Make predictions for the test set
+```{r}
+pred <- predict(tree, newdata = test, type = "class")
+```
+#### d.) Compute the accuracy
+```{r}
+table(pred, test$default)
+mean(pred == test$default)
+```
+
+### 4. Display the Decision Tree
+#### a.) Print the tree with labels
+```{r}
+plot(tree)
+text(tree, pretty = 0)
+```
+
+#### b.) Display the tree in nested decision form by just using the tree name
+```{r}
+tree
+```
+
+## Problem 2: Heart Data
+### 1. Set Up Data
+#### a.) Download the heart data to your machine from Piazza
+N/A
+
+#### b.) Load the data into R and attach it
+```{r}
+Heart <- read.csv(file = "/Users/biermanm/Documents/UT Dallas/Spring 2018/CS 4375.501/Heart.csv", header = TRUE, sep = ",")
+attach(Heart)
+```
+#### c.) Remove the "X" column
+```{r}
+Heart <- Heart[, -1]
+head(Heart)
+```
+#### d.) Set up train and test sets with 80% for training again using seed 2017
+```{r}
+i <- sample(1:nrow(Heart), nrow(Heart) * 0.80, replace = FALSE)
+train <- Heart[i, ]
+test <- Heart[-i, ]
+```
+
+### 2. Logistic Regression Model
+#### a.) Create a logistic regression model on the training data where AHD is predicted by all other variables
+```{r}
+glm <- glm(AHD~., data = train, family = binomial)
+```
+#### b.) Run a summary of the model
+```{r}
+summary(glm)
+```
+#### c.) Predict Yes/No on the test data
+```{r}
+probs <- predict(glm, newdata = test, type = "response")
+pred <- ifelse(probs > 0.5, "Yes", "No")
+```
+#### d.) Compute the accuracy
+```{r}
+table(pred, test$AHD)
+mean(pred == test$AHD)
+```
+
+### 3. Decision Tree Model
+#### a.) Create a decision tree model on the training data
+```{r}
+library(tree)
+tree <- tree(AHD~., data = train)
+```
+#### b.) Run a summary of the model
+```{r}
+summary(tree)
+```
+#### c.) Make predictions for the test set
+```{r}
+pred <- predict(tree, newdata = test, type = "class")
+```
+#### d.) Compute the accuracy
+```{r}
+table(pred, test$AHD)
+mean(pred == test$AHD)
+```
+
+### 4. Display the Decision Tree
+#### a.) Print the tree with labels
+```{r}
+plot(tree)
+text(tree, pretty = 0)
+```
+
+#### b.) Display the tree in nested decision form by just using the tree name
+```{r}
+tree
+```
+
+### 5. Cross Validation
+#### a.) Create a new tree from the cv.tree() function
+```{r}
+cv.tree <- cv.tree(tree, FUN = prune.misclass)
+```
+#### b.) Look at the $dev and $size variables by displaying the tree using its name
+```{r}
+cv.tree
+```
+#### c.) Plot in a 1x2 format: $size and $dev, $k and $dev
+```{r}
+par(mfrow = c(1,2))
+plot(cv.tree$size, cv.tree$dev, type = "b")
+plot(cv.tree$k, cv.tree$dev, type = "b")
+```
+
+### 6. Prune the Tree
+
+#### a.) Create a new pruned tree using best=n where n is the optimal size indicated in step 5
+```{r}
+prune.tree <- prune.misclass(tree, best = 5)
+```
+#### b.) Plot the new pruned tree with labels
+```{r}
+plot(prune.tree)
+text(prune.tree, pretty = 0)
+```
+
+### 7. Predict
+#### a.) Using the pruned tree, make predictions on the test set
+```{r}
+cv.pred <- predict(prune.tree, newdata = test, type = "class")
+```
+#### b.) Compute the accuracy
+```{r}
+table(cv.pred, test$AHD)
+mean(cv.pred == test$AHD)
+```
+
+## Questions
+### Problem 1
+1. The 'balance' variable was very important and the 'studentYes' variable was somewhat important in the Logistic Regression model.
+
+2. The Logistic Regression model and Decision Tree model both had an accuracy of 97.1%.
+
+3. A branch with two branches of the same value increases node purity.
+
+4.
+```{r}
+# if (balance < 1890.64)
+#   return 'Yes';
+# else
+#   return 'No';
+```
+
+5. No, because the Decision Tree for this data set only uses one variable ('balance'), so it is not very complex to begin with.
+
+### Problem 2
+1. 'Ca', 'Sex', and 'ChestPainnonanginal' were important variables in the Logistic Regression model.
+
+2. 'Thal', 'ChestPain', 'Oldpeak', 'Chol', 'Ca', 'Age', 'RestBP', 'MaxHR', and 'RestECG' were used to create the Decision Tree.
+
+3. The Logistic Regression model had a higher accuracy of 83.61% compared to 70.49% with the Decision Tree.
+
+4. The accuracy of the pruned Decision Tree is 75.41%.
+
+5. While the Decision Tree had a lower accuracy, it would be more meaningful to a doctor because they can visually see from the tree plot which combinations of features (or lack thereof) lead to heart disease by following the branches that lead to 'Yes' (or 'No', if they are looking for how to prevent heart disease).

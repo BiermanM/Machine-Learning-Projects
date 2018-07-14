@@ -1,0 +1,177 @@
+# Matthew Bierman, Homework 2
+
+# Problem 1: Simple Linear Regression
+
+## 1.
+```{r}
+library(ISLR)
+data(Auto)
+names(Auto)
+summary(Auto)
+
+set.seed(1234)
+i <- sample(1:nrow(Auto), nrow(Auto) * 0.75, replace = FALSE)
+train <- Auto[i,]
+test <- Auto[-i,]
+```
+
+## 2.
+```{r}
+lm1 <- lm(mpg~horsepower, data = train)
+summary(lm1)
+
+mse0 <- mean(lm1$residuals ^ 2)
+mse0
+```
+
+## 3.
+a.) y-hat = 39.237 - 0.153x
+
+b.) Since the R-squared value is 0.59, there is a moderately strong relationship between mpg and horsepower.
+
+c.) It is a negative correlation
+
+d.) RSE: The data is on average 4.993 hp away from the line of best fit.
+R-squared: The R-squared value is 0.59, which means the line of best fit fits the data fairly well.
+F-statistic: A high F-statistic of 422.6 leads to a low p-value of less than 2.2 * 10^(-16).
+
+e.) MSE: The mean squared error is 24.761, which is not close to 0, meaning horsepower is a good, but not the best, predictor of mpg.
+
+## 4.
+The data fits the line moderately well, but the data seems to have a curved/nonlinear feature, so linear regression might not be best.
+
+Prediction of 98 hp: y-hat = 39.237 - 0.153(98) = **24.243**
+
+A value of 24.243 mpg for 98 hp seems to match well with the values of the dataset within the 90-100 hp range.
+
+```{r}
+plot(mpg~horsepower, data = train, main = paste("Horsepower vs. MPG"))
+abline(lm1, col="blue")
+```
+
+## 5.
+With a correlation value of 0.812, there is a strong correlation between the predicted values and the actual mpg values.
+
+The MSE is 578.47, which is a lot higher than on the training data, which suggests that it is not a good predictor of mpg.
+```{r}
+predicted1 <- predict(lm1, test)
+cor(predicted1, test$mpg)
+
+mse1 <- mean(predicted1 ^ 2)
+mse1
+```
+
+
+## 6.
+The Residuals vs Fitted graph shows evidence of a nonlinear line of best fit.
+```{r}
+par(mfrow=c(2, 2))
+plot(lm1)
+```
+
+## 7.
+The second linear model has a R-squared value of 0.6757, compared to the R-squared value of 0.59 for the first linear model, showing that using log(mpg) fits the line of best fit a little bit better.
+```{r}
+lm2 <- lm(log(mpg)~horsepower, data = train)
+summary(lm2)
+```
+
+## 8.
+This line fits the data slightly better than with the data without using log.
+```{r}
+plot(log(mpg)~horsepower, data = train, main = paste("Horsepower vs. MPG"))
+abline(lm2, col="blue")
+```
+
+## 9.
+The correlation of the lm2 predictions is the same as for lm1, but the MSE is much closer to 0 in lm2 than lm1, meaning it fits the data much better.
+
+```{r}
+predicted2 <- predict(lm2, test)
+cor(predicted2, test$mpg)
+
+mse2 <- mean(predicted2 ^ 2)
+mse2
+```
+
+## 10.
+With lm2, the residuals are much lower compared to lm1, as the maximum residual has a magnitude of 0.6, whereas the maximum residual of lm1 has a magnitude of almost 20.
+```{r}
+par(mfrow=c(2, 2))
+plot(lm2)
+```
+
+# Problem 2: Multiple Linear Regression
+
+## 1.
+Positive Correlation:
+
+1. Displacement and Weight
+
+2. Horsepower and Weight
+
+3. Displacement and Horsepower
+
+Negative Correlation:
+
+1. MPG and Displacement
+
+2. MPG and Horsepower
+
+3. MPG and Weight
+
+```{r}
+pairs(Auto)
+```
+
+## 2.
+Two Strongest Positive Correlations:
+
+1. Displacement and Weight
+
+2. Displacement and Horsepower
+
+Two Strongest Negative Correlations:
+
+1. MPG and Weight
+
+2. MPG and Displacement
+
+```{r}
+cor(Auto$displacement, Auto$weight)
+cor(Auto$horsepower, Auto$weight)
+cor(Auto$displacement, Auto$horsepower)
+
+cor(Auto$mpg, Auto$displacement)
+cor(Auto$mpg, Auto$horsepower)
+cor(Auto$mpg, Auto$weight)
+```
+
+## 3.
+Weight, year, and origins 2 and 3 seem to have a statistically significant relationship with mpg.
+```{r}
+Auto$origin <- factor(Auto$origin)
+lm3 <- lm(mpg~.-name, data = Auto)
+summary(lm3)
+```
+
+## 4.
+There seems to be rather large residuals, with some data points reaching a residual magnitude of 15. Row 14 seems to be a leverage point
+```{r}
+ par(mfrow=c(2,2))
+ plot(lm3)
+ 
+ Auto[14,]
+```
+
+## 5.
+Using mpg ~ weight + displacement + year resulted in an R-squared value of 0.8067 with the same p-value, but mpg ~ weight \* displacement \* year resulted in an R-squared value of 0.8571 and a smaller F-statistic.
+```{r}
+lm4 <- lm(mpg~weight+displacement+year, data = Auto)
+summary(lm4)
+
+lm5 <- lm(mpg~weight*displacement*year, data = Auto)
+summary(lm5)
+
+anova(lm4, lm5)
+```
