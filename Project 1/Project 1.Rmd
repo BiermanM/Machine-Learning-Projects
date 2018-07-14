@@ -1,0 +1,372 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+# Matthew Bierman, Project 1
+
+# Dataset #1: Kickstarter
+
+### Introduction
+I will be performing *classification* on this Kickstarter dataset to predict if a project did or did not succeed. This dataset can be found at https://www.kaggle.com/kemical/kickstarter-projects, and I will be using the ks-projects-201801.csv file.
+
+### Load Data
+The Kickstarter dataset has been read from a .csv file and stored in the 'kickstarterData' variable. It has 378,661 rows (examples) and 15 columns (features).
+```{r}
+# Read data from .csv file
+kickstarterData <- read.csv(file = "ks-projects-201801.csv", header = TRUE, sep = ",")
+
+# Get dimensions of data
+dim(kickstarterData)
+```
+
+### Take Sample of Data
+Since this is such a large dataset (over 300,000 examples and a .csv file of 58MB), I have randomly selected 40% of the data to use for this project. 40% of the dataset is still rather large (~ 151,464 rows), but it will make computations significantly faster when running the R Markdown file.
+```{r}
+# Set seed
+set.seed(4375)
+
+# Take 40% random sample of dataset and replace it with current dataset
+i <- sample(1:nrow(kickstarterData), nrow(kickstarterData) * 0.4, replace = FALSE)
+kickstarterData <- kickstarterData[i, ]
+```
+
+### Data Examination
+dim() returns the dimensions of the dataset. There are 151,464 rows (examples) and 15 columns (features).
+```{r}
+# Data Examination Function #1
+dim(kickstarterData)
+```
+
+names() returns the names of the dataset's 15 features. str() will be used next to get the data types for each feature.
+```{r}
+# Data Examination Function #2
+names(kickstarterData)
+```
+
+str() returns the data types of the dataset's features and a preview of the values for each feature from the dataset's examples. Here is what each of the features mean:
+
+* `ID`: ID of the Kickstarter project
+* `name`: Title of the project
+* `category`: Specific category of the project
+* `main_category`: Main category of the project
+* `currency`: Type of units for the `goal` and `pledged` features (e.g. US Dollar, Euro, etc.)
+* `deadline`: Date the project will stop accepting donations, regardless if it met its goal
+* `goal`: Amount of money (units of amount is determined by `currency`) the project creator hopes to reach and/or exceed
+* `launched`: Date the project was launched
+* `pledged`: Amount of money (units of amount is determined by `currency`) donated to the project
+* `state`: Status of the project (if it succeeded, failed, etc.)
+* `backers`: Number of people who donated to the project
+* `country`: Location of the project
+* `usd.pledged`: Amount in `pledged` converted (conversions done by Kickstarter) to US Dollar
+* `usd_pledged_real`: Amount in `pledged` converted (conversions done by Fixer.io API) to US Dollar
+* `usd_goal_real`: Amount in `goal` converted (conversions done by Fixer.io API) to US Dollar
+```{r}
+# Data Examination Function #3
+str(kickstarterData)
+```
+
+head() returns a preview of the data (the first six lines). I will use `state` as my target for this project. Furthermore, I want to predict whether a Kickstarter project succeeds or fails. Project success is defined as a project meeting or exceeding its monetary goal (donated by backers) before the given deadline, and project failure is defined as a project not meeting its monetary goal before the given deadline.
+```{r}
+# Data Examination Function #4
+head(kickstarterData)
+```
+
+summary() returns a distribution summary for the data. Numeric/int variables (`ID`, `goal`, `pledged`, `backers`, `usd.pledged`, `usd_pledged_real`, `usd_goal_real`) show the quartile distribution for each feature and factor variables (`name`, `category`, `main_category`, `currency`, `deadline`, `launched`, `state`, `country`) show the six most frequent values for each feature.
+```{r}
+# Data Examination Function #5
+summary(kickstarterData)
+```
+
+### Data Cleaning
+
+After seeing the summary of the dataset, I realized that `state` has more options than just successful and failed, from what I could see using head(); there are actually six different options for `state`: canceled, failed, live, successful, suspended, and undefined. Live, suspended, and undefined each contribute to less than 1% of the dataset, as shown in the graph below.
+```{r}
+# Graph #1
+barplot(table(kickstarterData$state) / nrow(kickstarterData) * 100, main = "Percentage of Each State in Kickstarter Dataset", xlab = "States", ylab = "Percentage", las = 2)
+```
+
+Since it is impossible (given the current data, it would be impossible) to predict if a project is suspended or undefined and there is no benefit in predicting if a project is live, I will remove all examples containing any of those three states. Since the three combined states make up less than 3% of the entire dataset, it is not an issue.
+```{r}
+# Removed data that have states live, suspended, or undefined
+kickstarterData <- kickstarterData[kickstarterData$state != "live" & kickstarterData$state != "suspended" & kickstarterData$state != "undefined",]
+```
+
+The amount of time that a project is collecting donations could be important, since a project that is only live for a few days won't get as much exposure as a project that is live for a few weeks, which could mean less people backing the project. I think the time length of the project might affect whether a project is successful or not, so I extracted the month, day, and year from `deadline` and `launched` and took the difference of the two using difftime() to get the number of days a project was live. I then stored that information in the `time_length` numeric variable.
+```{r}
+# Use only month, day, and year for deadline & launched
+kickstarterData$deadline <- substr(kickstarterData$deadline, 0, 10)
+kickstarterData$launched <- substr(kickstarterData$launched, 0, 10)
+kickstarterData$time_length <- as.numeric(difftime(kickstarterData$deadline, kickstarterData$launched, units = "days"))
+```
+
+When using logistic regression in future steps, problems arise when some variables are integers and others are numeric, so I converted `backers` from an integer variable to a numeric variable.
+```{r}
+# Convert int in 'backers' to numeric
+kickstarterData$backers <- as.numeric(kickstarterData$backers)
+```
+
+Since it will be difficult with the given data to predict if a project was canceled (it only makes up about 10% of the dataset, as shown in the previous graph), I will use the "one-versus-all" technique for multiclass classification to create a binary classification. For this dataset, I will predict if a Kickstarter project succeeded or did not succeed. To do this, I created a feature called `success`, where `1` means the project was successful and `0` means the project did not succeed (e.g. the project failed or was canceled).
+```{r}
+# Add 'success feature'
+kickstarterData$success <- ifelse (kickstarterData$state == "successful", 1, 0)
+kickstarterData$success <- as.factor(kickstarterData$success)
+head(kickstarterData)
+```
+
+When looking at the graphs below for `backers`, `usd_pledged_real`, `usd_goal_real`, and `time_length`, there seems to be distinct clusters except when comparing `backers` and `usd_pledged_real`.
+```{r}
+# Graph #2
+pairs(kickstarterData[c(11, 14:16)], main = "Kickstarter Data", pch = 21, bg = c("red", "blue")[unclass(kickstarterData$success)])
+```
+
+After some testing, I have selected `backers`, `usd_pledged_real`, `usd_goal_real`, and `time_length` as the features used in this classification. All other features have been removed from the dataset.
+```{r}
+# Remove features
+kickstarterData <- kickstarterData[, -c(1:10, 12:13)]
+```
+
+The dataset has been split into 75% training data and 25% testing data.
+```{r}
+# Split into testing and training
+set.seed(4375)
+i <- sample(1:nrow(kickstarterData), nrow(kickstarterData) * 0.75, replace = FALSE)
+train <- kickstarterData[i, ]
+test <- kickstarterData[-i, ]
+```
+
+### Logistic Regression
+```{r}
+# Logistic Regression Model
+glm <- glm(success~., data = train, family = "binomial")
+
+# Accuracy for Logistic Regression
+probs <- predict(glm, newdata = test, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+table(pred, test$success)
+paste("Accuracy: ", round(mean(pred == test$success) * 100, 2), "%", sep = "")
+summary(pred)
+```
+
+### kNN
+I used sqrt(nrow(kickstarterData)) because I found from some online researching that the square root of the number of examples in the dataset often works well as the k value. I tested using k = 3, 5, 7, 9, 11, and 13, and sqrt(nrow(kickstarterData)) indeed performed better than the other 7 tested k values.
+```{r}
+# kNN
+library(class)
+pred <- knn(train = train, test = test, cl = train$success, k = sqrt(nrow(kickstarterData)))
+
+# Accuracy for kNN
+table(pred, test$success)
+paste("Accuracy: ", round(mean(pred == test$success) * 100, 2), "%", sep = "")
+summary(pred)
+```
+
+### Summary & Analysis
+Both algorithms performed extremely well on the dataset, with Logistic Regression resulting in a 98.82% accuracy on the test set and kNN resulting in a 99.05% accuracy on the test set. All kNN results performed around the 97-99% range with different k values, but k = sqrt(nrow(kickstarterData)) performed the best.
+
+Logistic Regression seemed to be a bit lopsided in its errors: 3 times it predicted 'Not Successful' but its true value was 'Successful' and 434 times it predicted 'Successful' but its true value was 'Not Successful'. kNN reported similar errors, most being in falsely predicting 'Success', but not as lopsided. I believe this error could arise from a large amount of backers for a project, but all of the backers donating small amounts, so the project is unable to met its goal.
+
+kNN performed slightly better than Logistic Regression, and this may have been because it formed clusters around the `usd_pledged_real` variable, so projects that had similar amounts of donation were grouped together. This helped predict if a project was successful because projects that receive large amounts of donations tend to succeed and projects that receive small amounts of donations tend to not succeed.
+
+# Dataset #2: TMDB 5000 Movies
+
+### Introduction
+I will be performing *regression* on this movie dataset to predict a movie's popularity. This dataset can be found at https://www.kaggle.com/tmdb/tmdb-movie-metadata, and I will be using the tmdb_5000_movies.csv file.
+
+### Load Data
+The movie dataset has been read from a .csv file and stored in the 'movieData' variable.
+```{r}
+movieData <- read.csv(file = "tmdb_5000_movies.csv", header = TRUE, sep = ",")
+```
+
+### Data Examination (Part 1)
+dim() returns the dimensions of the dataset. There are 4,803 rows (examples) and 20 columns (features).
+```{r}
+# Data Examination Function #1
+dim(movieData)
+```
+
+names() returns the names of the dataset's 15 features. str() will be used next to get the data types for each feature.
+```{r}
+# Data Examination Function #2
+names(movieData)
+```
+
+str() returns the data types of the dataset's features and a preview of the values for each feature from the dataset's examples. Here is what each of the features mean:
+
+* `budget`: Budget (in US Dollars) to create the movie
+* `genres`: Genre(s) of the movie
+* `homepage`: Homepage URL of the movie
+* `id`: ID of the movie
+* `keywords`: Keywords that describe the movie
+* `original_language`: Language the movie was originally filmed in
+* `original_title`: Title of the movie (Will be different if `original_language` is not English)
+* `overview`: Text summary of the movie
+* `popularity`: As described by https://developers.themoviedb.org/3/getting-started/popularity, popularity of a movie is based on: number of votes for the day, number of views for the day, number of users who marked it as a "favourite" for the day, number of users who added it to their "watchlist" for the day, release date, number of total votes, and previous days score
+* `production_companies`: Companies who worked on the movie
+* `production_countries`: Countries in which the movie was produced
+* `release_date`: Day, month, and year the movie was released
+* `revenue`: Amount (in US Dollars) earned from the movie
+* `runtime`: Length (in time) of the movie
+* `spoken_languages`: Language(s) spoken in the movie
+* `status`: Production status of the movie (has the movie been released, is it still in production, or has it not even been started yet)
+* `tagline`: Tagline of the movie
+* `title`: Title of the movie
+* `vote_average`: Average value of votes for the movie (A vote has a value between 1 and 10)
+* `vote_count`: Number of people who submitted a vote for the movie
+```{r}
+# Data Examination Function #3
+str(movieData)
+```
+
+head() returns a preview of the data. Since there is a lot of information, I decided to display only the first two lines. I will use `popularity` as the target for this project.
+```{r}
+# Data Examination Function #4
+head(movieData, n = 2)
+```
+
+summary() returns a distribution summary for the data. Numeric/int variables (`budget`, `id`, `popularity`, `revenue`, `runtime`, `vote_average`, `vote_count`) show the quartile distribution for each feature and factor variables (`genres`, `homepage`, `keywords`, `original_language`, `original_title`, `overview`, `production_companies`, `production_countries`, `release_date`, `spoken_languages`, `status`, `tagline`, `title`) show the six most frequent values for each feature.
+```{r}
+# Data Examination Function #5
+summary(movieData)
+```
+
+### Data Cleaning (Part 1)
+
+After some testing, I have selected `budget`, `release_date`, `revenue`, `runtime`, `vote_average`, and `vote_count` as the features used in this regression. All other features have been removed from the dataset.
+```{r}
+# Remove features
+movieData <- movieData[,-c(2:8, 10:11, 15:18)]
+```
+
+`release_date` isn't too helpful in its current state, since it is a factor and it includes the day, month, and year. Comparing the year between two movies may be important, but day and month are less so. I removed the day and month from `release_date` and converted the year from a factor variable to a numeric variable.
+```{r}
+# Convert release_date from factor to numeric
+movieData$release_date <- as.numeric(substr(movieData$release_date, 0, 4))
+```
+
+As shown in the summary() results above, `release_date` and `runtime` contains a few NA values, so I replaced those NA values with the median values of the respective features.
+```{r}
+# Replace NA's with median
+movieData$release_date[is.na(movieData$release_date)] <- median(movieData$release_date, na.rm=TRUE)
+movieData$runtime[is.na(movieData$runtime)] <- median(movieData$runtime, na.rm=TRUE)
+```
+
+### Data Examination (Part 2)
+I used pairs() to search for any linear patterns between any two features, but most of the graphs seem to show clusters forming when comparing two features. This might mean that kNN will perform better than Linear Regression on this dataset.
+```{r}
+# Graph #1
+library(ggplot2)
+pairs(movieData)
+```
+
+I created a linear model using all features to predict `popularity`. As shown by the summary of the model, `revenue`, `vote_average`, and `vote_count` seem to be the best predictors, as their p-values are close to 0. This makes sense, as a popular movie will have a high ratings (`vote_average`), more people will go to the theatres to see a popular movie (high `revenue`), and even if a movie doesn't have high ratings, people are more likely to give bad ratings to a movie (`vote_count`) since they know more people will see the rating they gave.
+```{r}
+lm <- lm(popularity~., data = movieData)
+summary(lm)
+```
+
+### Data Cleaning (Part 2)
+The dataset has been split into 75% training data and 25% testing data.
+```{r}
+# Split into testing and training
+set.seed(4375)
+i <- sample(1:nrow(movieData), nrow(movieData) * 0.75, replace = FALSE)
+train <- movieData[i, ]
+test <- movieData[-i, ]
+```
+
+### Linear Regression (Part 1)
+```{r}
+# Linear Regession Model
+lm <- lm(popularity~revenue+vote_count+vote_average, data = train)
+summary(lm)
+
+# MSE of Model
+paste("MSE:", mean(lm$residuals ^ 2))
+```
+
+### Data Examination (Part 3)
+An MSE of 262 is quite high. Using the graph below, we can see why: there are a few outliers that result in extremely high resdiuals.
+```{r}
+# Graph #2
+plot(train$popularity, lm$residuals, ylab="Residuals", xlab="Popularity", main="Popularity of Movies", pch = 20) 
+abline(0, 0)
+```
+
+### Data Cleaning (Part 3)
+Looking at the entire dataset, not just the training set, we can see that there are only 6 movies (out of the total 4,803 movies) that have a popularity score greater than 400. Since these outliers make up only 0.012% of the dataset, I think it is safe to remove them.
+```{r}
+# Removed outliers
+outliers <- movieData[(movieData$popularity > 400),]
+outliers
+movieData <- movieData[(movieData$popularity < 400),]
+```
+
+Since the overall dataset has been modified (6 examples have been removed), we have to recreate the train and test datasets.
+```{r}
+# Recreated train and test sets
+i <- sample(1:nrow(movieData), nrow(movieData) * 0.75, replace = FALSE)
+train <- movieData[i, ]
+test <- movieData[-i, ]
+```
+
+### Linear Regression (Part 2)
+Now we will create a Linear Regression model without the outliers. This model's MSE is much lower.
+```{r}
+# Linear Regression Model (without outliers)
+lm <- lm(popularity~revenue+vote_count+vote_average, data = train)
+summary(lm)
+
+# MSE of Model
+paste("MSE:", mean(lm$residuals ^ 2))
+```
+
+Looking at the new residual graph (without outliers), we can see that all of the residuals have a magnitude less than 160.
+```{r}
+# Graph #2 (without outliers)
+plot(train$popularity, lm$residuals, ylab="Residuals", xlab="Popularity", main="Popularity of Movies", pch = 20) 
+abline(0, 0)
+```
+
+```{r}
+# Accuracy for Linear Regression
+pred <- predict(lm, newdata = test)
+paste("Accuracy: ", round(cor(pred, test$popularity) * 100, 2), "%", sep = "")
+```
+
+### kNN
+```{r}
+# kNN
+library(caret)
+kNNreg <- knnreg(train[, c(3:7)], train[, 2], k = sqrt(nrow(movieData)))
+kNNpred <- predict(kNNreg, test[, c(3:7)])
+summary(kNNpred)
+
+# Accuracy for kNN
+paste("Accuracy: ", round(cor(kNNpred, test$popularity) * 100, 2), "%", sep = "")
+```
+
+### Scaled kNN
+Having all features be on the same scale is a popular technique for improving kNN accuracy. Below is performing kNN on the dataset after the features have been scaled.
+```{r}
+# Scaled kNN
+df <- data.frame(scale(movieData))
+train <- df[i,]
+test <- df[-i,]
+fit <- knnreg(train[, c(3:7)], train[,2], k = sqrt(nrow(movieData)))
+predictions <- predict(fit, test[, c(3:7)])
+summary(predictions)
+
+# Accuracy for Scaled kNN
+paste("Accuracy: ", round(cor(predictions, test$popularity) * 100, 2), "%", sep = "")
+```
+
+### Summary & Analysis
+Both algorithms performed very well, with Linear Regression resulting in an 86.99% accuracy and kNN resulting in an 89.39% accuracy. Using scaling significantly improved kNN, as it jumped from 77.78% (without scaling) to 89.39% (with scaling) accuracy. Since regression is quite different from classification in that regression will never perfectly make a prediction for a value, I used the correlation between the results from the model on the test data and the actual test data as accuracy.
+
+When it came to kNN, I tested various combinations of the predictors listed in 'Data Cleaning (Part 1)', but only removing `budget` seemed to have the largest impact. I found this surprising because I would think a movie with a larger budget would be more popular than a movie with a smaller budget, since most of that money would go towards promotion and marketing, thus making a movie popular.
+
+Also, for comparison, without removing outliers, accuracy was 71.76% for Linear Regression and 69.51% for scaled kNN, so you can see how helpful removing outliers was for this project.
+
+One idea of why scaled kNN performed better than Linear Regression would be that the predictors listed above might have a quadratic-type relationship, meaning that as `budget` or `revenue` increases, `popularity` increases at a much faster rate. kNN can create clusters around movies that perform extremely well, since all of them will have significantly higher `popularity` scores compared to other movies that did not perform as well.
