@@ -1,0 +1,291 @@
+# Matthew Bierman, Project 2
+
+# Dataset #1: House Sales in King County, USA
+Link to dataset on Kaggle: https://www.kaggle.com/harlfoxem/housesalesprediction
+
+### Install Required Libraries
+```{r}
+library(caret)
+library(corrplot)
+library(e1071)
+library(dplyr)
+library(tree)
+library(neuralnet)
+```
+
+### Import Datasets
+```{r}
+houseData <- read.csv(file = "kc_house_data.csv", header = TRUE, sep = ",")
+```
+
+### Data Cleaning
+```{r}
+# removed id, lat, long
+houseData <- houseData[, -c(1, 18, 19)]
+
+# replaced sqft_living and sqft_lot with sqft_living15 and sqft_lot15 (respectively) since values are more recent
+houseData$sqft_living <- houseData$sqft_living15
+houseData$sqft_lot <- houseData$sqft_lot15
+houseData <- houseData[, -c(17, 18)]
+
+# yr_renovated will mess up Linear Regression with 0's as no renovation, replace with 1 = renovated, 0 = not renovated
+houseData$is_renovated <- ifelse(houseData$yr_renovated == 0, 0, 1)
+
+# replace date with year and month
+houseData$year <- as.integer(substr(houseData$date, 0, 4))
+houseData$month <- as.integer(substr(houseData$date, 5, 6))
+houseData <- houseData[, -c(1)]
+
+# add years_since_renovation column
+houseData$years_since_renovation <- ifelse(houseData$yr_renovated == 0, abs(houseData$year - houseData$yr_built), abs(houseData$year - houseData$yr_renovated))
+houseData <- houseData[, -c(14)]
+
+str(houseData)
+summary(houseData)
+
+# can't use pairs() b/c too many rows
+corrplot(cor(houseData), method = "circle")
+
+# Split into testing and training
+set.seed(4375)
+i <- sample(1:nrow(houseData), nrow(houseData) * 0.75, replace = FALSE)
+train <- houseData[i, ]
+test <- houseData[-i, ]
+```
+
+### Linear Regression
+```{r}
+lm <- lm(price~., data = train)
+summary(lm)
+
+# Accuracy
+pred <- predict(lm, newdata = test)
+paste("Accuracy: ", round(cor(pred, test$price) * 100, 2), "%", sep = "")
+
+plot(train$price, lm$residuals, ylab="Residuals", xlab="Price of Sold Homes", main="Price", pch = 20) 
+abline(0, 0)
+```
+
+### Remove Outliers
+```{r}
+# remove outliers
+houseData <- houseData[(houseData$price < 4000000),]
+
+# resample data
+i <- sample(1:nrow(houseData), nrow(houseData) * 0.75, replace = FALSE)
+train <- houseData[i, ]
+test <- houseData[-i, ]
+```
+
+### Linear Regression -- Without Outliers
+```{r}
+lm <- lm(price~. -zipcode -month -years_since_renovation -is_renovated, data = train)
+summary(lm)
+
+# Accuracy
+pred <- predict(lm, newdata = test)
+paste("Accuracy: ", round(cor(pred, test$price) * 100, 2), "%", sep = "")
+
+plot(train$price, lm$residuals, ylab="Residuals", xlab="Price of Sold Homes", main="Price", pch = 20) 
+abline(0, 0)
+```
+
+### SVM -- Linear
+```{r}
+svm <- svm(price ~ ., train, kernel = "linear")
+pred <- predict(svm, test)
+
+# Accuracy
+paste("Accuracy: ", round(cor(pred, test$price) * 100, 2), "%", sep = "")
+```
+
+### SVM -- Radial
+```{r}
+svm <- svm(price ~ ., train, kernel = "radial")
+pred <- predict(svm, test)
+
+# Accuracy
+paste("Accuracy: ", round(cor(pred, test$price) * 100, 2), "%", sep = "")
+```
+
+### SVM -- Polynomial
+```{r}
+svm <- svm(price ~ ., train, kernel = "polynomial")
+pred <- predict(svm, test)
+
+# Accuracy
+paste("Accuracy: ", round(cor(pred, test$price) * 100, 2), "%", sep = "")
+```
+
+### Neural Networks
+```{r}
+scaledHouseData <- as.data.frame(scale(houseData, center = apply(houseData, 2, min), scale = apply(houseData, 2, max) - apply(houseData, 2, min)))
+
+# resample data
+i <- sample(1:nrow(scaledHouseData), nrow(scaledHouseData) * 0.75, replace = FALSE)
+train <- scaledHouseData[i, ]
+test <- scaledHouseData[-i, ]
+
+n <- names(train)
+f <- as.formula(paste("price ~", paste(n[!n %in% "price"], collapse = " + ")))
+nn <- neuralnet(f, data = train, hidden = c(5,3), linear.output = T)
+
+pred <- compute(nn, test[, -1])
+
+pred <- pred$net.result * (max(houseData$price) - min(houseData$price)) + min(houseData$price)
+scaledPrice <- (test$price) * (max(houseData$price) - min(houseData$price)) + min(houseData$price)
+
+# Accuracy
+paste("Accuracy: ", round(cor(pred, scaledPrice) * 100, 2), "%", sep = "")
+```
+
+### Conclusion
+Since I used regression to predict house prices for this dataset, I used accuracy of correlation as my evaluation metrics for comparing Linear Regression, SVM, and Neural Networks. With Linear Regression, I had an accuracy of 81.05% with outliers and 81.22% without outliers. With SVM, I had an accuracy of 81.01% with a linear kernel, 85.98% with a radial kernel, and 78.62% with a polynomial kernel. With Neural Networks, I had an accuracy of 72.88%. I think SVM (with a radial kernel) performed best of the three algorithms because of the correlation graph, which showed clusters of high correlation in the top left, center left, and top center. My feature selection from looking at the different data types of the original dataset. I converted the time (which was a string) into numeric year and month variables, although the month variable wasn't as helpful. I also created a years_since_renovation column because some homes were never renovated, and having a 0 in the renovation year column might throw off the Linear Regression model. Through my initial Linear Regression model, I saw the best features to remove were zipcode, month, years_since_renovation, and is_renovated. One surprising thing I learned from the data is that zipcode does not affect house prices. I was surprised by this because I imagined houses with high prices would be in the same area as other houses with high prices, and likewise with low priced homes.
+
+# Dataset #2: French employment, salaries, population per town
+Link to dataset on Kaggle: https://www.kaggle.com/etiennelq/french-employment-by-town
+
+### Import Datasets
+```{r}
+townData <- read.csv(file = "base_etablissement_par_tranche_effectif.csv", header = TRUE, sep = ",")
+salaryData <- read.csv(file = "net_salary_per_town_categories.csv", header = TRUE, sep = ",")
+populationData <- read.csv(file = "populationCondensed.csv", header = TRUE, sep = ",")
+```
+
+### Data Cleaning
+```{r}
+# merge town and salary data
+townData <- merge(townData, salaryData, by = c("CODGEO", "LIBGEO"), all = TRUE)
+
+# remove libgeo column
+townData <- townData[, -c(2, 6:14)]
+
+# convert dep from factor to int
+townData$DEP <- as.integer(townData$DEP)
+
+# Here is the original code for creating populationCondensed.csv: 332.9MB -> 437KB
+# group population data into only total number of people for each town
+# populationData <- as.data.frame(populationData %>% group_by(CODGEO) %>% summarise(sum(NB)))
+# write.csv(populationData, "populationCondensed.csv", row.names = FALSE)
+
+townData <- merge(townData, populationData, by = c("CODGEO"), all = TRUE)
+
+# rename new column from "sum.NB." to "population"
+colnames(townData)[colnames(townData) == "sum.NB."] <- "population"
+
+str(townData)
+
+# remove CODGEO
+townData <- townData[, -1]
+
+# remove all rows with NA
+townData <- na.omit(townData)
+
+# Split into testing and training
+set.seed(4375)
+i <- sample(1:nrow(townData), nrow(townData) * 0.75, replace = FALSE)
+train <- townData[i, ]
+test <- townData[-i, ]
+```
+
+### Linear Regression
+```{r}
+lm <- lm(E14TST~., data = train)
+summary(lm)
+
+# Accuracy
+pred <- predict(lm, newdata = test)
+paste("Accuracy: ", round(cor(pred, test$E14TST) * 100, 2), "%", sep = "")
+
+plot(train$E14TST, lm$residuals, ylab="Residuals", xlab="Number of Firms Per Town", main="Number of Firms", pch = 20) 
+abline(0, 0)
+```
+
+### Remove Outliers
+```{r}
+# remove outliers
+townData <- townData[(townData$E14TST < 15000),]
+
+# resample data
+i <- sample(1:nrow(townData), nrow(townData) * 0.75, replace = FALSE)
+train <- townData[i, ]
+test <- townData[-i, ]
+```
+
+### Linear Regression -- Without Outliers
+```{r}
+lm <- lm(E14TST~REG + SNHMC14 + SNHMFC14 + SNHMHC14 + population, data = train)
+summary(lm)
+
+# Accuracy
+pred <- predict(lm, newdata = test)
+paste("Accuracy: ", round(cor(pred, test$E14TST) * 100, 2), "%", sep = "")
+
+plot(train$E14TST, lm$residuals, ylab="Residuals", xlab="Number of Firms Per Town", main="Number of Firms", pch = 20) 
+abline(0, 0)
+
+# 95.4%: (all)
+# 95.68%: REG + SNHMC14 + SNHME14 + SNHMFC14 + SNHMFP14 + SNHMFE14 + SNHMHC14 + SNHMHE14 + SNHM5014 + SNHMH5014 + population
+# 95.12%: population
+
+```
+
+### Linear Regression -- For Comparison: Without Population Dataset
+```{r}
+lm <- lm(E14TST~.-population, data = train)
+summary(lm)
+
+# Accuracy
+pred <- predict(lm, newdata = test)
+paste("Accuracy: ", round(cor(pred, test$E14TST) * 100, 2), "%", sep = "")
+
+plot(train$E14TST, lm$residuals, ylab="Residuals", xlab="Number of Firms Per Town", main="Number of Firms", pch = 20) 
+abline(0, 0)
+```
+
+### Decision Tree
+```{r}
+tree <- tree(E14TST~., data = train)
+
+summary(tree)
+
+plot(tree)
+text(tree, pretty = 0)
+tree
+
+# Accuracy
+pred <- predict(tree, newdata = test)
+paste("Accuracy: ", round(cor(pred, test$E14TST) * 100, 2), "%", sep = "")
+
+# Cross Validation graph
+cv = cv.tree(tree)
+plot(cv$size, cv$dev, type = "b")
+# already at best size, no pruning needed
+```
+
+### kNN
+```{r}
+# Using k = 3
+fit <- knnreg(train[, -3], train[, 3], k = 3)
+pred <- predict(fit, test[, -3])
+paste("Accuracy: ", round(cor(pred, test$E14TST) * 100, 2), "%", sep = "")
+
+# Using k = 5
+fit <- knnreg(train[, -3], train[, 3], k = 5)
+pred <- predict(fit, test[, -3])
+paste("Accuracy: ", round(cor(pred, test$E14TST) * 100, 2), "%", sep = "")
+
+# Using k = 7
+fit <- knnreg(train[, -3], train[, 3], k = 7)
+pred <- predict(fit, test[, -3])
+paste("Accuracy: ", round(cor(pred, test$E14TST) * 100, 2), "%", sep = "")
+
+# Using k = square root of the number of rows in the townData dataset
+fit <- knnreg(train[, -3], train[, 3], k = sqrt(nrow(townData)))
+pred <- predict(fit, test[, -3])
+paste("Accuracy: ", round(cor(pred, test$E14TST) * 100, 2), "%", sep = "")
+```
+
+### Conclusion
+Since I used regression to predict number of firms in a town for this dataset, I used accuracy of correlation as my evaluation metrics for comparing Linear Regression, Decision Trees, and kNN. With Linear Regression, I had an accuracy of 97.37% with outliers and 95.61% without outliers. With Decision Trees, I had an accuracy of 93.33%. With kNN, I had an accuracy of 93.11% for k = 3, 94.48% for k = 5, 94.5% for k = 7, and 93.59% for k = sqrt(nrow(townData)). I think Linear Regression performed best because town population was directly correlated to number of firms in the respective town.
+My feature selection included merging multiple datasets to find the best features in each while condensing the population file to take the sum of each town to get the total population for each town, condensing the population.csv file from 332.9MB to 437KB, making it much easier to work with. I was surprised to see that population had the only impact on the Decision Tree algorithm, but when using only population for Linear Regression, I got a lower accuracy than with all features.
